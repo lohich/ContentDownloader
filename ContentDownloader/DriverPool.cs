@@ -16,6 +16,8 @@ namespace ContentDownloader
 
         private static int inUse;
 
+        public static int InUse => inUse;
+
         public static int Capacity { get; set; } = 5;
 
         public static IWebDriver GetDriver()
@@ -25,15 +27,17 @@ namespace ContentDownloader
                 Thread.Sleep(50);
             }
 
+            Interlocked.Increment(ref inUse);
+
             IWebDriver result;
             if (!pool.TryDequeue(out result))
             {
                 var driverParams = new ChromeOptions();
                 driverParams.AddArgument("headless");
-                result = new ChromeDriver(driverParams);
+                var service = ChromeDriverService.CreateDefaultService();
+                service.HideCommandPromptWindow = true;
+                result = new ChromeDriver(service, driverParams);
             }
-
-            Interlocked.Increment(ref inUse);
 
             return result;
         }
