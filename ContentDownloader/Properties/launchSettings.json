@@ -2,7 +2,7 @@
   "profiles": {
     "ContentDownloader": {
       "commandName": "Project",
-      "commandLineArgs": "--url \"http://joyreactor.cc\" --link \"//div[@class=\\\"image\\\"]/a | //div[@class=\\\"image\\\"]/img\" --output \"C:\\proj\\download\" --nextContainer \"//a[@class=\\\"next\\\"]\""
+      "commandLineArgs": "--url \"http://joyreactor.cc/user/lohich\" --link \"//div[@class=\\\"image\\\"]/a | //div[@class=\\\"image\\\"]/img\" --output \"C:\\proj\\download\" --nextContainer \"//a[@class=\\\"next\\\"]\" --nextLinks \"//a[@class=\\\"next\\\"]\" --container \"//div[preceding-sibling::h2/text()=\\\"Читает\\\"]/a\""
     }
   }
 }

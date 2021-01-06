@@ -34,6 +34,7 @@ namespace ContentDownloader
             {
                 var driverParams = new ChromeOptions();
                 driverParams.AddArgument("headless");
+                driverParams.AddUserProfilePreference("profile.default_content_setting_values.images", 2);
                 var service = ChromeDriverService.CreateDefaultService();
                 service.HideCommandPromptWindow = true;
                 result = new ChromeDriver(service, driverParams);

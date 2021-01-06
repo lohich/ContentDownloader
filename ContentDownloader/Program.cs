@@ -10,6 +10,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Threading;
+using System.Web;
 
 namespace ContentDownloader
 {
@@ -28,16 +29,17 @@ namespace ContentDownloader
             Parser.Default.ParseArguments<CommandLineParams>(args)
                 .WithParsed(p => clp = p).WithNotParsed(x => Console.ReadKey());
 
-            Task.Run(Stats);
+            var threads = new List<Task>();
+            threads.Add(Task.Run(Stats));
 
             DriverPool.Capacity = clp.DownloadThreadsCount;
-            var threads = new Task[clp.DownloadThreadsCount];
+            
             for (int i = 0; i < clp.DownloadThreadsCount; i++)
             {
-                threads[i] = Task.Run(async () => await Download(clp.Output));
+                threads.Add(Task.Run(async () => await Download(clp.Output)));
             }
 
-            Task.Run(() => FindLinks(clp));  
+            threads.Add(Task.Run(() => FindLinks(clp)));  
 
             await Task.WhenAll(threads);
 
@@ -72,7 +74,7 @@ namespace ContentDownloader
                     var bmp = new Bitmap(await client.GetStreamAsync(url));
                     if (fileName == null)
                     {
-                        fileName = Path.Combine(path, url.Segments.Last());
+                        fileName = Path.Combine(path, HttpUtility.UrlDecode(url.Segments.Last()));
                     }
                     else
                     {
