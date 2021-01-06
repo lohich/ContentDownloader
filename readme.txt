@@ -1,0 +1,1 @@
+substring-before(//actor[@id="1"]/text(), "n")
