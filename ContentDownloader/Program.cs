@@ -17,10 +17,12 @@ namespace ContentDownloader
     static class Program
     {
         static bool isFinished;
+        static bool isContainersFindingFinished;
         static ConcurrentQueue<(Uri link, string fileName)> downloadLinks = new ConcurrentQueue<(Uri, string)>();
+        static ConcurrentQueue<Uri> containerLinks = new ConcurrentQueue<Uri>();
         static int totalLinks;
         static int downloaded;
-        static bool IsFinished  => !isFinished || !downloadLinks.IsEmpty;
+        static bool IsExecuting => !isFinished || !downloadLinks.IsEmpty;
 
         static async Task Main(string[] args)
         {
@@ -29,17 +31,22 @@ namespace ContentDownloader
             Parser.Default.ParseArguments<CommandLineParams>(args)
                 .WithParsed(p => clp = p).WithNotParsed(x => Console.ReadKey());
 
+            if (!Directory.Exists(clp.Output))
+            {
+                Directory.CreateDirectory(clp.Output);
+            }
+
             var threads = new List<Task>();
             threads.Add(Task.Run(Stats));
 
             DriverPool.Capacity = clp.DownloadThreadsCount;
-            
+
             for (int i = 0; i < clp.DownloadThreadsCount; i++)
             {
                 threads.Add(Task.Run(async () => await Download(clp.Output)));
             }
 
-            threads.Add(Task.Run(() => FindLinks(clp)));  
+            threads.Add(Task.Run(async () => await FindLinks(clp)));
 
             await Task.WhenAll(threads);
 
@@ -50,20 +57,28 @@ namespace ContentDownloader
         static void Stats()
         {
             var startTime = DateTime.Now;
-            while (IsFinished)
+            while (IsExecuting)
             {
                 Console.Clear();
                 Console.WriteLine($"Started {startTime}");
                 Console.WriteLine($"Downloaded {downloaded}/{totalLinks}");
                 Console.WriteLine($"Drivers in use: {DriverPool.InUse}");
                 Console.WriteLine($"Time passed: {DateTime.Now - startTime}");
+                if (isContainersFindingFinished)
+                {
+                    Console.WriteLine("All containers found");
+                }
+                if (isFinished)
+                {
+                    Console.WriteLine("All links found");
+                }
                 Thread.Sleep(1000);
             }
         }
 
         static async Task Download(string path)
         {
-            while (IsFinished)
+            while (IsExecuting)
             {
                 if (downloadLinks.TryDequeue(out var info))
                 {
@@ -128,7 +143,7 @@ namespace ContentDownloader
             return result.Distinct();
         }
 
-        static IWebDriver GetNextPage(string url)
+        static IWebDriver GetPage(string url)
         {
             var driver = DriverPool.GetDriver();
             driver.Navigate().GoToUrl(url);
@@ -142,7 +157,7 @@ namespace ContentDownloader
             {
                 var nextPageLink = driver.FindElement(By.XPath(xpath)).GetAttribute("href");
                 DriverPool.Release(driver);
-                return GetNextPage(nextPageLink);
+                return GetPage(nextPageLink);
             }
             catch (Exception e) when (e is ArgumentNullException || e is NoSuchElementException)
             {
@@ -151,9 +166,9 @@ namespace ContentDownloader
             }
         }
 
-        static void DoWithLinks(string selector, ISearchContext element, Action<string> whatToDo)
+        static void DoWithLinks(string selector, ISearchContext element, string attributes, Action<string> whatToDo)
         {
-            var links = GetElementsAttributesByXpath(selector, "href;src", element);
+            var links = GetElementsAttributesByXpath(selector, attributes, element);
 
             if (links != null)
             {
@@ -163,7 +178,7 @@ namespace ContentDownloader
 
         static void EnqueueLinks(string selector, ISearchContext element, string fileNameSelector)
         {
-            DoWithLinks(selector, element, link =>
+            DoWithLinks(selector, element, "href;src", link =>
             {
                 var fileName = fileNameSelector == null ? null : element.FindElement(By.XPath(fileNameSelector)).Text;
                 downloadLinks.Enqueue((new Uri(link), fileName));
@@ -171,27 +186,46 @@ namespace ContentDownloader
             });
         }
 
-        static void FindLinks(CommandLineParams args)
+        static void ListPages(string firstPageUrl, string nextPageSelector, string linksSelector, string filenameSelector, Action<ISearchContext> actionOnPage = null)
         {
-            var currentPage = GetNextPage(args.URI.ToString());
+            var currentPage = GetPage(firstPageUrl);
 
             while (currentPage != null)
             {
-                DoWithLinks(args.ContainerSelector, currentPage, containerLink =>
-                {
-                    var currentContainerPage = GetNextPage(containerLink);
+                actionOnPage?.Invoke(currentPage);
 
-                    while (currentContainerPage != null)
-                    {
-                        EnqueueLinks(args.LinkSelector, currentContainerPage, args.FileNameSelector);
-
-                        currentContainerPage = currentContainerPage.GetNextPage(args.NextPageInContainerSeclector);
-                    }
-                });
-
-                EnqueueLinks(args.LinkSelector, currentPage, args.FileNameSelector);
-                currentPage = currentPage.GetNextPage(args.NextPageContainerSelector);
+                EnqueueLinks(linksSelector, currentPage, filenameSelector);
+                currentPage = currentPage.GetNextPage(nextPageSelector);
             }
+        }
+
+        static void ListPagesInContainer(string nextPageSelector, string linksSelector, string filenameSelector)
+        {
+            while (!isContainersFindingFinished || !containerLinks.IsEmpty)
+            {
+                if (containerLinks.TryDequeue(out var firstPageUrl))
+                {
+                    ListPages(firstPageUrl.ToString(), nextPageSelector, linksSelector, filenameSelector);
+                }
+            }
+        }
+
+        static async Task FindLinks(CommandLineParams args)
+        {
+            var threads = new List<Task>();
+
+            for (int i = 0; i < args.DownloadThreadsCount; i++)
+            {
+                threads.Add(Task.Run(() => ListPagesInContainer(args.NextPageInContainerSeclector, args.LinkSelector, args.FileNameSelector)));
+            }
+
+            ListPages(args.URI.ToString(), args.NextPageContainerSelector, args.LinkSelector, args.FileNameSelector,
+                page => DoWithLinks(args.ContainerSelector, page, "href",
+                containerLink => containerLinks.Enqueue(new Uri(containerLink))));
+
+            isContainersFindingFinished = true;
+
+            await Task.WhenAll(threads);
 
             isFinished = true;
         }
