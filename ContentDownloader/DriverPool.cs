@@ -10,27 +10,38 @@ using OpenQA.Selenium.Chrome;
 
 namespace ContentDownloader
 {
-    internal class DriverPool
+    internal class DriverPool : IDisposable
     {
-        private readonly ConcurrentQueue<IWebDriver> pool = new ConcurrentQueue<IWebDriver>();
+        private readonly ConcurrentQueue<IWebDriver> free = new ConcurrentQueue<IWebDriver>();
 
-        private readonly Semaphore semaphore;
+        private readonly ConcurrentBag<IWebDriver> all = new ConcurrentBag<IWebDriver>();
+
+        private readonly SemaphoreSlim semaphore;
+
+        private readonly int capacity;
 
         public DriverPool(int capacity)
         {
-            semaphore = new Semaphore(capacity, capacity);
+            this.capacity = capacity;
+            semaphore = new SemaphoreSlim(capacity, capacity);
         }
 
-        public int InUse { get; private set; }
+        public int InUse => capacity - semaphore.CurrentCount;
+
+        public void Dispose()
+        {
+            foreach (var item in all)
+            {
+                item.Close();
+            }
+        }
 
         public IWebDriver GetDriver()
         {
-            semaphore.WaitOne();
-
-            InUse++;
+            semaphore.Wait();
 
             IWebDriver result;
-            if (!pool.TryDequeue(out result))
+            if (!free.TryDequeue(out result))
             {
                 var driverParams = new ChromeOptions();
                 driverParams.AddArgument("headless");
@@ -38,6 +49,7 @@ namespace ContentDownloader
                 var service = ChromeDriverService.CreateDefaultService();
                 service.HideCommandPromptWindow = true;
                 result = new ChromeDriver(service, driverParams);
+                all.Add(result);
             }
             
             return result;
@@ -45,8 +57,7 @@ namespace ContentDownloader
 
         public void Release(IWebDriver item)
         {
-            pool.Enqueue(item);
-            InUse--;
+            free.Enqueue(item);
             semaphore.Release();            
         }
     }

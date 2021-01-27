@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Web;
+using System.Reflection;
 
 namespace ContentDownloader
 {
@@ -18,7 +19,7 @@ namespace ContentDownloader
     {
         static bool isFinished;
         static bool isContainersFindingFinished;
-        static ConcurrentQueue<(Uri link, string fileName)> downloadLinks = new ConcurrentQueue<(Uri, string)>();
+        static ConcurrentQueue<Uri> downloadLinks = new ConcurrentQueue<Uri>();
         static ConcurrentQueue<Uri> containerLinks = new ConcurrentQueue<Uri>();
         static int totalLinks;
         static int downloaded;
@@ -27,7 +28,13 @@ namespace ContentDownloader
 
         static async Task Main(string[] args)
         {
+            AppDomain.CurrentDomain.ProcessExit += CurrentDomain_ProcessExit;
             await Parser.Default.ParseArguments<CommandLineParams>(args).WithNotParsed(x => Console.ReadKey()).WithParsedAsync(DoWork);
+        }
+
+        static void CurrentDomain_ProcessExit(object sender, EventArgs e)
+        {
+            driverPool.Dispose();
         }
 
         static async Task DoWork(CommandLineParams args)
@@ -44,7 +51,7 @@ namespace ContentDownloader
 
             for (int i = 0; i < args.DownloadThreadsCount; i++)
             {
-                threads.Add(Task.Run(async () => await Download(args.Output)));
+                threads.Add(Task.Run(async () => await Download(args.Output, args.FileNameSegments)));
             }
 
             threads.Add(Task.Run(async () => await FindLinks(args)));
@@ -77,37 +84,41 @@ namespace ContentDownloader
             }
         }
 
-        static async Task Download(string path)
+        public static ImageFormat ParseImageFormat(string str)
+        {
+            if (str.ToLower() == ".jpg")
+            {
+                return ImageFormat.Jpeg;
+            }
+
+            str = str.Remove(0, 1);
+            var result = typeof(ImageFormat)
+                    .GetProperty(str, BindingFlags.Public | BindingFlags.Static | BindingFlags.IgnoreCase)
+                    .GetValue(str, null) as ImageFormat;
+
+            return result;
+        }
+
+        static async Task Download(string path, int fileNameSegments)
         {
             while (IsExecuting)
             {
-                if (downloadLinks.TryDequeue(out var info))
+                if (downloadLinks.TryDequeue(out var url))
                 {
-                    var fileName = info.fileName;
-                    var url = info.link;
-
                     using var client = new HttpClient();
                     var bmp = new Bitmap(await client.GetStreamAsync(url));
-                    if (fileName == null)
-                    {
-                        fileName = Path.Combine(path, HttpUtility.UrlDecode(url.Segments.Last()));
-                    }
-                    else
-                    {
-                        if (!fileName.Contains(".jpg"))
-                        {
-                            fileName += ".jpg";
-                        }
-                        fileName = Path.Combine(path, fileName);
-                    }
+
+                    var fileName = Path.Combine(path, HttpUtility.UrlDecode(string.Concat(url.Segments.TakeLast(fileNameSegments)).Replace('/', ' ')));
 
                     var tmp = Path.Combine(path, Path.GetRandomFileName());
 
-                    bmp.Save(tmp, ImageFormat.Jpeg);
+                    var imageExtension = Path.GetExtension(fileName);
+
+                    bmp.Save(tmp, ParseImageFormat(imageExtension));
 
                     if (File.Exists(fileName))
                     {
-                        var mask = fileName.Insert(fileName.IndexOf(".jpg"), "({0})");
+                        var mask = fileName.Insert(fileName.IndexOf(imageExtension), "({0})");
                         int index = 1;
                         while (File.Exists(fileName))
                         {
@@ -180,17 +191,16 @@ namespace ContentDownloader
             }
         }
 
-        static void EnqueueLinks(string selector, ISearchContext element, string fileNameSelector)
+        static void EnqueueLinks(string selector, ISearchContext element)
         {
             DoWithLinks(selector, element, "href;src", link =>
             {
-                var fileName = fileNameSelector == null ? null : element.FindElement(By.XPath(fileNameSelector)).Text;
-                downloadLinks.Enqueue((new Uri(link), fileName));
+                downloadLinks.Enqueue(new Uri(link));
                 Interlocked.Increment(ref totalLinks);
             });
         }
 
-        static void ListPages(string firstPageUrl, string nextPageSelector, string linksSelector, string filenameSelector, Action<ISearchContext> actionOnPage = null)
+        static void ListPages(string firstPageUrl, string nextPageSelector, string linksSelector, Action<ISearchContext> actionOnPage = null)
         {
             var currentPage = GetPage(firstPageUrl);
 
@@ -198,18 +208,18 @@ namespace ContentDownloader
             {
                 actionOnPage?.Invoke(currentPage);
 
-                EnqueueLinks(linksSelector, currentPage, filenameSelector);
+                EnqueueLinks(linksSelector, currentPage);
                 currentPage = currentPage.GetNextPage(nextPageSelector);
             }
         }
 
-        static void ListPagesInContainer(string nextPageSelector, string linksSelector, string filenameSelector)
+        static void ListPagesInContainer(string nextPageSelector, string linksSelector)
         {
             while (!isContainersFindingFinished || !containerLinks.IsEmpty)
             {
                 if (containerLinks.TryDequeue(out var firstPageUrl))
                 {
-                    ListPages(firstPageUrl.ToString(), nextPageSelector, linksSelector, filenameSelector);
+                    ListPages(firstPageUrl.ToString(), nextPageSelector, linksSelector);
                 }
             }
         }
@@ -220,10 +230,10 @@ namespace ContentDownloader
 
             for (int i = 0; i < args.DownloadThreadsCount; i++)
             {
-                threads.Add(Task.Run(() => ListPagesInContainer(args.NextPageInContainerSeclector, args.LinkSelector, args.FileNameSelector)));
+                threads.Add(Task.Run(() => ListPagesInContainer(args.NextPageInContainerSeclector, args.LinkSelector)));
             }
 
-            ListPages(args.URI.ToString(), args.NextPageContainerSelector, args.LinkSelector, args.FileNameSelector,
+            ListPages(args.URI.ToString(), args.NextPageContainerSelector, args.LinkSelector,
                 page => DoWithLinks(args.ContainerSelector, page, "href",
                 containerLink => containerLinks.Enqueue(new Uri(containerLink))));
 

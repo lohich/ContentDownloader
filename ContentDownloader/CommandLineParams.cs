@@ -19,8 +19,8 @@ namespace ContentDownloader
         [Option("nextLinks", HelpText = "Selector for achieving next page with links inside container")]
         public string NextPageInContainerSeclector { get; set; }
 
-        [Option("names", HelpText = "Selector for downloaded file name")]
-        public string FileNameSelector { get; set; }
+        [Option("names", HelpText = "Count of url segments that used in output filename", Default = 1)]
+        public int FileNameSegments { get; set; }
 
         [Option("output", HelpText = "Output directory", Required = true)]
         public string Output { get; set; }
