@@ -22,31 +22,32 @@ namespace ContentDownloader
         static ConcurrentQueue<Uri> containerLinks = new ConcurrentQueue<Uri>();
         static int totalLinks;
         static int downloaded;
+        static DriverPool driverPool;
         static bool IsExecuting => !isFinished || !downloadLinks.IsEmpty;
 
         static async Task Main(string[] args)
         {
-            CommandLineParams clp = null;
+            await Parser.Default.ParseArguments<CommandLineParams>(args).WithNotParsed(x => Console.ReadKey()).WithParsedAsync(DoWork);
+        }
 
-            Parser.Default.ParseArguments<CommandLineParams>(args)
-                .WithParsed(p => clp = p).WithNotParsed(x => Console.ReadKey());
-
-            if (!Directory.Exists(clp.Output))
+        static async Task DoWork(CommandLineParams args)
+        {
+            if (!Directory.Exists(args.Output))
             {
-                Directory.CreateDirectory(clp.Output);
+                Directory.CreateDirectory(args.Output);
             }
 
             var threads = new List<Task>();
             threads.Add(Task.Run(Stats));
 
-            DriverPool.Capacity = clp.DownloadThreadsCount;
+            driverPool = new DriverPool(args.DownloadThreadsCount);
 
-            for (int i = 0; i < clp.DownloadThreadsCount; i++)
+            for (int i = 0; i < args.DownloadThreadsCount; i++)
             {
-                threads.Add(Task.Run(async () => await Download(clp.Output)));
+                threads.Add(Task.Run(async () => await Download(args.Output)));
             }
 
-            threads.Add(Task.Run(async () => await FindLinks(clp)));
+            threads.Add(Task.Run(async () => await FindLinks(args)));
 
             await Task.WhenAll(threads);
 
@@ -62,7 +63,7 @@ namespace ContentDownloader
                 Console.Clear();
                 Console.WriteLine($"Started {startTime}");
                 Console.WriteLine($"Downloaded {downloaded}/{totalLinks}");
-                Console.WriteLine($"Drivers in use: {DriverPool.InUse}");
+                Console.WriteLine($"Drivers in use: {driverPool.InUse}");
                 Console.WriteLine($"Time passed: {DateTime.Now - startTime}");
                 if (isContainersFindingFinished)
                 {
@@ -145,7 +146,7 @@ namespace ContentDownloader
 
         static IWebDriver GetPage(string url)
         {
-            var driver = DriverPool.GetDriver();
+            var driver = driverPool.GetDriver();
             driver.Navigate().GoToUrl(url);
 
             return driver;
@@ -156,12 +157,12 @@ namespace ContentDownloader
             try
             {
                 var nextPageLink = driver.FindElement(By.XPath(xpath)).GetAttribute("href");
-                DriverPool.Release(driver);
+                driverPool.Release(driver);
                 return GetPage(nextPageLink);
             }
             catch (Exception e) when (e is ArgumentNullException || e is NoSuchElementException)
             {
-                DriverPool.Release(driver);
+                driverPool.Release(driver);
                 return null;
             }
         }
@@ -172,7 +173,10 @@ namespace ContentDownloader
 
             if (links != null)
             {
-                Parallel.ForEach(links.Where(x => x != null), whatToDo);
+                foreach (var link in links.Where(x => x != null))
+                {
+                    whatToDo(link);
+                }
             }
         }
 

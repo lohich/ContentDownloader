@@ -10,24 +10,24 @@ using OpenQA.Selenium.Chrome;
 
 namespace ContentDownloader
 {
-    static class DriverPool
+    internal class DriverPool
     {
-        private static ConcurrentQueue<IWebDriver> pool = new ConcurrentQueue<IWebDriver>();
+        private readonly ConcurrentQueue<IWebDriver> pool = new ConcurrentQueue<IWebDriver>();
 
-        private static int inUse;
+        private readonly Semaphore semaphore;
 
-        public static int InUse => inUse;
-
-        public static int Capacity { get; set; } = 5;
-
-        public static IWebDriver GetDriver()
+        public DriverPool(int capacity)
         {
-            while(inUse >= Capacity)
-            {
-                Thread.Sleep(50);
-            }
+            semaphore = new Semaphore(capacity, capacity);
+        }
 
-            Interlocked.Increment(ref inUse);
+        public int InUse { get; private set; }
+
+        public IWebDriver GetDriver()
+        {
+            semaphore.WaitOne();
+
+            InUse++;
 
             IWebDriver result;
             if (!pool.TryDequeue(out result))
@@ -39,14 +39,15 @@ namespace ContentDownloader
                 service.HideCommandPromptWindow = true;
                 result = new ChromeDriver(service, driverParams);
             }
-
+            
             return result;
         }
 
-        public static void Release(IWebDriver item)
+        public void Release(IWebDriver item)
         {
             pool.Enqueue(item);
-            Interlocked.Decrement(ref inUse);
+            InUse--;
+            semaphore.Release();            
         }
     }
 }
