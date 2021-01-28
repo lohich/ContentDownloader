@@ -76,18 +76,21 @@ namespace ContentDownloader
 
                 bmp.Save(tmp, ParseImageFormat(imageExtension));
 
-                if (File.Exists(fileName))
+                lock (this)
                 {
-                    var mask = fileName.Insert(fileName.IndexOf(imageExtension), "({0})");
-                    int index = 1;
-                    while (File.Exists(fileName))
+                    if (File.Exists(fileName))
                     {
-                        fileName = string.Format(mask, index);
-                        index++;
+                        var mask = fileName.Insert(fileName.IndexOf(imageExtension), "({0})");
+                        int index = 1;
+                        while (File.Exists(fileName))
+                        {
+                            fileName = string.Format(mask, index);
+                            index++;
+                        }
                     }
-                }
 
-                File.Move(tmp, fileName);
+                    File.Move(tmp, fileName);
+                }
                 Interlocked.Increment(ref downloaded);
             }
         }

@@ -16,13 +16,13 @@ namespace ContentDownloader
 
         private readonly ConcurrentQueue<Uri> containerLinks = new ConcurrentQueue<Uri>();
         private int totalLinks;
-        
+
         public LinksFinder(ImageDownloader downloader, DriverPool driverPool)
         {
             this.downloader = downloader;
             this.driverPool = driverPool;
         }
-        
+
         public int TotalLinks => totalLinks;
 
         public bool IsFinished { get; private set; }
@@ -104,24 +104,35 @@ namespace ContentDownloader
                 actionOnPage?.Invoke(currentPage);
 
                 EnqueueLinks(linksSelector, currentPage);
-                currentPage = GetNextPage(currentPage,nextPageSelector);
+                currentPage = GetNextPage(currentPage, nextPageSelector);
             }
         }
 
-        private void ListPagesInContainer(string nextPageSelector, string linksSelector)
+        private void ListPagesInContainer(string nextPageSelector, string pathSelector, string linksSelector)
         {
-            if (nextPageSelector != null)
+            while (!IsContainersFindingFinished || !containerLinks.IsEmpty)
             {
-                while (!IsContainersFindingFinished || !containerLinks.IsEmpty)
+                if (containerLinks.TryDequeue(out var firstPageUrl))
                 {
-                    if (containerLinks.TryDequeue(out var firstPageUrl))
+                    if (pathSelector != null)
                     {
-                        ListPages(firstPageUrl.ToString(), nextPageSelector, linksSelector);
+                        var path = pathSelector.Split(";");
+                        var page = GetPage(firstPageUrl.ToString());
+                        string nextPageLink = null;
+                        foreach (var item in path)
+                        {
+                            nextPageLink = page.FindElement(By.XPath(item)).GetAttribute("href");
+                            driverPool.Release(page);
+                            page = GetPage(nextPageLink);
+                        }
+                        driverPool.Release(page);
+                        firstPageUrl = new Uri(nextPageLink);
                     }
-                    else
-                    {
-                        Thread.Sleep(1000);
-                    }
+                    ListPages(firstPageUrl.ToString(), nextPageSelector, linksSelector);
+                }
+                else
+                {
+                    Thread.Sleep(1000);
                 }
             }
         }
@@ -132,7 +143,7 @@ namespace ContentDownloader
 
             for (int i = 0; i < args.DownloadThreadsCount; i++)
             {
-                threads.Add(Task.Run(() => ListPagesInContainer(args.NextPageInContainerSeclector, args.LinkSelector)));
+                threads.Add(Task.Run(() => ListPagesInContainer(args.NextPageInContainerSeclector, args.PathInContainer, args.LinkSelector)));
             }
 
             ListPages(args.URI.ToString(), args.NextPageContainerSelector, args.LinkSelector,

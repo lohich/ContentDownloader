@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using CommandLine;
 
 namespace ContentDownloader
@@ -30,5 +28,20 @@ namespace ContentDownloader
 
         [Option("threads", HelpText = "Count of threads for work", Default = 5)]
         public int DownloadThreadsCount { get; set; }
+
+        [Option("containerPath", HelpText = "Path in container that shoud be passed before finding links")]
+        public string PathInContainer { get; set; }
+
+        [Option("authUrl", HelpText = "Url for auth page")]
+        public string AuthUrl { get; set; }
+
+        [Option("authLogin", HelpText = "Login selector and login in format \"selector;login\"")]
+        public string LoginSelector { get; set; }
+
+        [Option("authPassword", HelpText = "Password selector and password in format \"selector;password\"")]
+        public string PasswordSelector { get; set; }
+
+        [Option("authSubmit", HelpText = "Submit button selector")]
+        public string SubmitSelector { get; set; }
     }
 }

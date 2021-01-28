@@ -19,10 +19,12 @@ namespace ContentDownloader
         private readonly SemaphoreSlim semaphore;
 
         private readonly int capacity;
+        private readonly AuthParams authParams;
 
-        public DriverPool(int capacity)
+        public DriverPool(int capacity, AuthParams authParams)
         {
             this.capacity = capacity;
+            this.authParams = authParams;
             semaphore = new SemaphoreSlim(capacity, capacity);
         }
 
@@ -49,6 +51,20 @@ namespace ContentDownloader
                 var service = ChromeDriverService.CreateDefaultService();
                 service.HideCommandPromptWindow = true;
                 result = new ChromeDriver(service, driverParams);
+
+                if(authParams != null)
+                {
+                    result.Navigate().GoToUrl(authParams.AuthUrl);
+
+                    var tmp = authParams.LoginSelector.Split(';');
+                    result.FindElement(By.XPath(tmp[0])).SendKeys(tmp[1]);
+
+                    tmp = authParams.PasswordSelector.Split(';');
+                    result.FindElement(By.XPath(tmp[0])).SendKeys(tmp[1]);
+
+                    result.FindElement(By.XPath(authParams.SubmitSelector)).Click();
+                }
+
                 all.Add(result);
             }
             

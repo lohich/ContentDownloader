@@ -32,7 +32,14 @@ namespace ContentDownloader
                 Directory.CreateDirectory(args.Output);
             }
 
-            driverPool = new DriverPool(args.DownloadThreadsCount);
+            AuthParams auth = null;
+
+            if(args.AuthUrl != null)
+            {
+                auth = new AuthParams { AuthUrl = args.AuthUrl, SubmitSelector = args.SubmitSelector, LoginSelector = args.LoginSelector, PasswordSelector = args.PasswordSelector };
+            }
+
+            driverPool = new DriverPool(args.DownloadThreadsCount, auth);
             downloader = new ImageDownloader(args.FileNameSegments, args.Output);
             linksFinder = new LinksFinder(downloader, driverPool);
 
