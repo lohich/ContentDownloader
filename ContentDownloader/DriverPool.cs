@@ -1,10 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 
@@ -35,6 +31,8 @@ namespace ContentDownloader
             foreach (var item in all)
             {
                 item.Close();
+                item.Quit();
+                item.Dispose();
             }
         }
 
@@ -51,8 +49,9 @@ namespace ContentDownloader
                 var service = ChromeDriverService.CreateDefaultService();
                 service.HideCommandPromptWindow = true;
                 result = new ChromeDriver(service, driverParams);
+                all.Add(result);
 
-                if(authParams != null)
+                if (authParams != null)
                 {
                     result.Navigate().GoToUrl(authParams.AuthUrl);
 
@@ -64,17 +63,15 @@ namespace ContentDownloader
 
                     result.FindElement(By.XPath(authParams.SubmitSelector)).Click();
                 }
-
-                all.Add(result);
             }
-            
+
             return result;
         }
 
         public void Release(IWebDriver item)
         {
             free.Enqueue(item);
-            semaphore.Release();            
+            semaphore.Release();
         }
     }
 }

@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenQA.Selenium;
@@ -24,7 +23,6 @@ namespace ContentDownloader
         }
 
         public int TotalLinks => totalLinks;
-
         public bool IsFinished { get; private set; }
         public bool IsContainersFindingFinished { get; private set; }
 

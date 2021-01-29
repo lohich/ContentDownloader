@@ -3,7 +3,7 @@ using CommandLine;
 
 namespace ContentDownloader
 {
-    class CommandLineParams
+    internal class CommandLineParams
     {
         [Option("link", HelpText = "Selector for link with file to be downloaded", Required = true)]
         public string LinkSelector { get; set; }

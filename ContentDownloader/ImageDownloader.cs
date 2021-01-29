@@ -1,11 +1,8 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web;
@@ -17,13 +14,13 @@ namespace ContentDownloader
         static readonly string invalidRegStr;
         private int downloaded;
         private readonly int fileNameSegments;
-        private readonly string path;
+        private readonly string outputPath;
         private readonly ObservableConcurrentQueue<Uri> downloadLinks = new ObservableConcurrentQueue<Uri>();
 
-        public ImageDownloader(int fileNameSegments, string path)
+        public ImageDownloader(int fileNameSegments, string outputPath)
         {
             this.fileNameSegments = fileNameSegments;
-            this.path = path;
+            this.outputPath = outputPath;
             downloadLinks.ContentChanged += EventHadler;
         }
 
@@ -40,44 +37,31 @@ namespace ContentDownloader
             downloadLinks.Enqueue(url);
         }
 
-        public static ImageFormat ParseImageFormat(string str)
-        {
-            if (str.ToLower() == ".jpg")
-            {
-                return ImageFormat.Jpeg;
-            }
-
-            str = str.Remove(0, 1);
-            var result = typeof(ImageFormat)
-                    .GetProperty(str, BindingFlags.Public | BindingFlags.Static | BindingFlags.IgnoreCase)
-                    .GetValue(str, null) as ImageFormat;
-
-            return result;
-        }
-
-        static string GetValidFileName(string fileName)
+        private static string GetValidFileName(string fileName)
         {
             return Regex.Replace(fileName, invalidRegStr, "_");
         }
 
-        private async void Download()
+        private async void DownloadNext()
         {
             if (downloadLinks.TryDequeue(out var url))
             {
                 using var client = new HttpClient();
-                var bmp = new Bitmap(await client.GetStreamAsync(url));
+                using var stream = await client.GetStreamAsync(url);
 
                 var fileName = GetValidFileName(HttpUtility.UrlDecode(string.Concat(url.Segments.TakeLast(fileNameSegments))));
-                fileName = Path.Combine(path, fileName);
+                fileName = Path.Combine(outputPath, fileName);
 
-                var tmp = Path.Combine(path, Path.GetRandomFileName());
+                var tmp = Path.Combine(outputPath, Path.GetRandomFileName());
 
-                var imageExtension = Path.GetExtension(fileName);
+                using var file = File.Create(tmp);
 
-                bmp.Save(tmp, ParseImageFormat(imageExtension));
+                stream.CopyTo(file);
+                file.Close();
 
                 lock (this)
                 {
+                    var imageExtension = Path.GetExtension(fileName);
                     if (File.Exists(fileName))
                     {
                         var mask = fileName.Insert(fileName.IndexOf(imageExtension), "({0})");
@@ -99,7 +83,7 @@ namespace ContentDownloader
         {
             if (args.Action == NotifyConcurrentQueueChangedAction.Enqueue)
             {
-                Download();
+                DownloadNext();
             }
         }
     }
