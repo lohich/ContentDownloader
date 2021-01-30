@@ -2,9 +2,11 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Web;
 
 namespace ContentDownloader
@@ -16,12 +18,14 @@ namespace ContentDownloader
         private readonly int fileNameSegments;
         private readonly string outputPath;
         private readonly ObservableConcurrentQueue<Uri> downloadLinks = new ObservableConcurrentQueue<Uri>();
+        private readonly SemaphoreSlim semaphore;
 
-        public ImageDownloader(int fileNameSegments, string outputPath)
+        public ImageDownloader(int fileNameSegments, string outputPath, int threads)
         {
             this.fileNameSegments = fileNameSegments;
             this.outputPath = outputPath;
-            downloadLinks.ContentChanged += EventHadler;
+            downloadLinks.ContentChanged += EventHadler;        
+            semaphore = new SemaphoreSlim(threads, threads);
         }
 
         static ImageDownloader()
@@ -42,8 +46,10 @@ namespace ContentDownloader
             return Regex.Replace(fileName, invalidRegStr, "_");
         }
 
-        private async void DownloadNext()
+        private async Task DownloadNext()
         {
+            semaphore.Wait();
+
             if (downloadLinks.TryDequeue(out var url))
             {
                 using var client = new HttpClient();
@@ -77,13 +83,15 @@ namespace ContentDownloader
                 }
                 Interlocked.Increment(ref downloaded);
             }
+
+            semaphore.Release();
         }
 
         private void EventHadler(object sender, NotifyConcurrentQueueChangedEventArgs<Uri> args)
         {
             if (args.Action == NotifyConcurrentQueueChangedAction.Enqueue)
             {
-                DownloadNext();
+                Task.Run(DownloadNext);
             }
         }
     }

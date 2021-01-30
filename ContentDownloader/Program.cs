@@ -21,6 +21,7 @@ namespace ContentDownloader
 
         static async Task DoWork(CommandLineParams args)
         {
+            var startTime = DateTime.Now;
             if (!Directory.Exists(args.Output))
             {
                 Directory.CreateDirectory(args.Output);
@@ -36,24 +37,24 @@ namespace ContentDownloader
             using (var usingPool = new DriverPool(args.DownloadThreadsCount, auth))
             {
                 driverPool = usingPool;
-                downloader = new ImageDownloader(args.FileNameSegments, args.Output);
+                downloader = new ImageDownloader(args.FileNameSegments, args.Output, args.DownloadThreadsCount);
                 linksFinder = new LinksFinder(downloader, driverPool);
 
                 var threads = new List<Task>();
 
-                threads.Add(Task.Run(Stats));
+                threads.Add(Task.Run(() => Stats(startTime)));
                 threads.Add(Task.Run(async () => await linksFinder.FindLinks(args)));
 
                 await Task.WhenAll(threads);
             }
 
+            Stats(startTime);
             Console.WriteLine("Finished!");
         }
 
-        static void Stats()
+        static void Stats(DateTime startTime)
         {
-            var startTime = DateTime.Now;
-            while (IsExecuting)
+            do
             {
                 Console.Clear();
                 Console.WriteLine($"Started {startTime}");
@@ -69,7 +70,7 @@ namespace ContentDownloader
                     Console.WriteLine("All links found");
                 }
                 Thread.Sleep(1000);
-            }
+            } while (IsExecuting);
         }
     }
 }
