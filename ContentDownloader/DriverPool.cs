@@ -17,6 +17,8 @@ namespace ContentDownloader
         private readonly int capacity;
         private readonly AuthParams authParams;
 
+        private bool disposed;
+
         public DriverPool(int capacity, AuthParams authParams)
         {
             this.capacity = capacity;
@@ -28,11 +30,17 @@ namespace ContentDownloader
 
         public void Dispose()
         {
-            foreach (var item in all)
+            if (!disposed)
             {
-                item.Close();
-                item.Quit();
-                item.Dispose();
+                foreach (var item in all)
+                {
+                    item.Close();
+                    item.Quit();
+                    item.Dispose();
+                }
+
+                GC.SuppressFinalize(this);
+                disposed = true;
             }
         }
 
@@ -50,6 +58,7 @@ namespace ContentDownloader
                 var service = ChromeDriverService.CreateDefaultService();
                 service.HideCommandPromptWindow = true;
                 result = new ChromeDriver(service, driverParams);
+
                 all.Add(result);
 
                 if (authParams != null)
@@ -63,6 +72,8 @@ namespace ContentDownloader
                     result.FindElement(By.XPath(tmp[0])).SendKeys(tmp[1]);
 
                     result.FindElement(By.XPath(authParams.SubmitSelector)).Click();
+
+                    Thread.Sleep(1000);
                 }
             }
 

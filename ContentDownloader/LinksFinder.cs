@@ -153,6 +153,7 @@ namespace ContentDownloader
             await Task.WhenAll(threads);
 
             IsFinished = true;
+            driverPool.Dispose();
         }
     }
 }
