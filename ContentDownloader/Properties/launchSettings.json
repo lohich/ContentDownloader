@@ -2,7 +2,7 @@
   "profiles": {
     "ContentDownloader": {
       "commandName": "Project",
-      "commandLineArgs": "--url \"http://joyreactor.cc/user/lohich/favorite\" --link \"//div[@class='post_content']//div[@class='image']//a | //div[@class='post_content']//div[@class='image']/img\" --output \"C:\\proj\\download\" --nextContainer \"//a[@class=\\\"next\\\"]\" --authUrl http://joyreactor.cc/login --authLogin \"//div[@id='content']//input[@name='signin[username]'];lohich2\" --authPassword \"//div[@id='content']//input[@name='signin[password]'];478033WoW\" --authSubmit \"//div[@id='content']//input[@type='submit']\""
+      "commandLineArgs": "--url \"http://joyreactor.cc/user/lohich\" --link \"//div[@class='post_content']//div[@class='image']//a | //div[@class='post_content']//div[@class='image']/img\" --output \"C:\\proj\\download\" --nextContainer \"//a[@class='next']\" --nextLinks \"//a[@class='next']\" --container \"//div[preceding-sibling::h2/text()='Читает']/a\" --authUrl http://joyreactor.cc/login --authLogin \"//div[@id='content']//input[@name='signin[username]'];lohich2\" --authPassword \"//div[@id='content']//input[@name='signin[password]'];478033WoW\" --authSubmit \"//div[@id='content']//input[@type='submit']\" --containerPath \"//a[text()='Бездна']\""
     }
   }
 }

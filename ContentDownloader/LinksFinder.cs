@@ -120,11 +120,10 @@ namespace ContentDownloader
                         foreach (var item in path)
                         {
                             nextPageLink = page.FindElement(By.XPath(item)).GetAttribute("href");
-                            driverPool.Release(page);
-                            page = GetPage(nextPageLink);
-                        }
-                        driverPool.Release(page);
+                            page.Navigate().GoToUrl(nextPageLink);
+                        }                        
                         firstPageUrl = new Uri(nextPageLink);
+                        driverPool.Release(page);
                     }
                     ListPages(firstPageUrl.ToString(), nextPageSelector, linksSelector);
                 }
