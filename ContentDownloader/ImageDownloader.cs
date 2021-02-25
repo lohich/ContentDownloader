@@ -59,6 +59,7 @@ namespace ContentDownloader
 
                 if (fileNameConflictPolicy == FileNameConflictPolicy.Ignore && File.Exists(fileName))
                 {
+                    Interlocked.Increment(ref downloaded);
                     return;
                 }
 
