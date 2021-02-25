@@ -43,5 +43,8 @@ namespace ContentDownloader
 
         [Option("authSubmit", HelpText = "Submit button selector")]
         public string SubmitSelector { get; set; }
+
+        [Option("fileNameConflict", HelpText = "What to do when file exists(ignore, replace, rename)", Default = FileNameConflictPolicy.Ignore)]
+        public FileNameConflictPolicy FileNameConflictPolicy { get; set; }
     }
 }

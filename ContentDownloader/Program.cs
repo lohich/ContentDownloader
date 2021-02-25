@@ -16,7 +16,7 @@ namespace ContentDownloader
 
         static async Task Main(string[] args)
         {
-            await Parser.Default.ParseArguments<CommandLineParams>(args).WithParsedAsync(DoWork);
+            await new Parser(x => x.CaseInsensitiveEnumValues = true).ParseArguments<CommandLineParams>(args).WithParsedAsync(DoWork);
         }
 
         static async Task DoWork(CommandLineParams args)
@@ -37,7 +37,7 @@ namespace ContentDownloader
             using (var usingPool = new DriverPool(args.DownloadThreadsCount, auth))
             {
                 driverPool = usingPool;
-                downloader = new ImageDownloader(args.FileNameSegments, args.Output, args.DownloadThreadsCount);
+                downloader = new ImageDownloader(args.FileNameSegments, args.Output, args.DownloadThreadsCount, args.FileNameConflictPolicy);
                 linksFinder = new LinksFinder(downloader, driverPool);
 
                 var threads = new List<Task>();

@@ -19,13 +19,15 @@ namespace ContentDownloader
         private readonly string outputPath;
         private readonly ObservableConcurrentQueue<Uri> downloadLinks = new ObservableConcurrentQueue<Uri>();
         private readonly SemaphoreSlim semaphore;
+        private readonly FileNameConflictPolicy fileNameConflictPolicy;
 
-        public ImageDownloader(int fileNameSegments, string outputPath, int threads)
+        public ImageDownloader(int fileNameSegments, string outputPath, int threads, FileNameConflictPolicy fileNameConflictPolicy)
         {
             this.fileNameSegments = fileNameSegments;
             this.outputPath = outputPath;
-            downloadLinks.ContentChanged += EventHadler;        
+            downloadLinks.ContentChanged += EventHadler;
             semaphore = new SemaphoreSlim(threads, threads);
+            this.fileNameConflictPolicy = fileNameConflictPolicy;
         }
 
         static ImageDownloader()
@@ -52,11 +54,16 @@ namespace ContentDownloader
 
             if (downloadLinks.TryDequeue(out var url))
             {
-                using var client = new HttpClient();
-                using var stream = await client.GetStreamAsync(url);
-
                 var fileName = GetValidFileName(HttpUtility.UrlDecode(string.Concat(url.Segments.TakeLast(fileNameSegments))));
                 fileName = Path.Combine(outputPath, fileName);
+
+                if (fileNameConflictPolicy == FileNameConflictPolicy.Ignore && File.Exists(fileName))
+                {
+                    return;
+                }
+
+                using var client = new HttpClient();
+                using var stream = await client.GetStreamAsync(url);
 
                 var tmp = Path.Combine(outputPath, Path.GetRandomFileName());
 
@@ -65,11 +72,11 @@ namespace ContentDownloader
                 stream.CopyTo(file);
                 file.Close();
 
-                lock (this)
+                if (fileNameConflictPolicy == FileNameConflictPolicy.Rename && File.Exists(fileName))
                 {
-                    var imageExtension = Path.GetExtension(fileName);
-                    if (File.Exists(fileName))
+                    lock (this)
                     {
+                        var imageExtension = Path.GetExtension(fileName);
                         var mask = fileName.Insert(fileName.IndexOf(imageExtension), "({0})");
                         int index = 1;
                         while (File.Exists(fileName))
@@ -78,9 +85,9 @@ namespace ContentDownloader
                             index++;
                         }
                     }
-
-                    File.Move(tmp, fileName);
                 }
+
+                File.Move(tmp, fileName, true);
                 Interlocked.Increment(ref downloaded);
             }
 
