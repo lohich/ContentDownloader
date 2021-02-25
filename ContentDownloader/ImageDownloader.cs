@@ -15,6 +15,7 @@ namespace ContentDownloader
     {
         static readonly string invalidRegStr;
         private int downloaded;
+        private int skipped;
         private readonly int fileNameSegments;
         private readonly string outputPath;
         private readonly ObservableConcurrentQueue<Uri> downloadLinks = new ObservableConcurrentQueue<Uri>();
@@ -38,6 +39,8 @@ namespace ContentDownloader
 
         public int Downloaded => downloaded;
 
+        public int Skipped => skipped;
+
         public void Download(Uri url)
         {
             downloadLinks.Enqueue(url);
@@ -59,7 +62,8 @@ namespace ContentDownloader
 
                 if (fileNameConflictPolicy == FileNameConflictPolicy.Ignore && File.Exists(fileName))
                 {
-                    Interlocked.Increment(ref downloaded);
+                    Interlocked.Increment(ref skipped);
+                    semaphore.Release();
                     return;
                 }
 

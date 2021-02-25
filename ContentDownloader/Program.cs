@@ -58,7 +58,7 @@ namespace ContentDownloader
             {
                 Console.Clear();
                 Console.WriteLine($"Started {startTime}");
-                Console.WriteLine($"Downloaded {downloader.Downloaded}/{linksFinder.TotalLinks}");
+                Console.WriteLine($"Downloaded {downloader.Downloaded}/{linksFinder.TotalLinks} (Skipped {downloader.Skipped})");
                 Console.WriteLine($"Drivers in use: {driverPool.InUse}");
                 Console.WriteLine($"Time passed: {DateTime.Now - startTime}");
                 if (linksFinder.IsContainersFindingFinished)
