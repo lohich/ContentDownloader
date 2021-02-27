@@ -67,15 +67,23 @@ namespace ContentDownloader
                     return;
                 }
 
-                using var client = new HttpClient();
-                using var stream = await client.GetStreamAsync(url);
-
                 var tmp = Path.Combine(outputPath, Path.GetRandomFileName());
 
-                using var file = File.Create(tmp);
+                try
+                {
+                    using var client = new HttpClient();
+                    using var stream = await client.GetStreamAsync(url);
+                    using var file = File.Create(tmp);
 
-                stream.CopyTo(file);
-                file.Close();
+                    stream.CopyTo(file);
+                    file.Close();
+                }
+                catch
+                {
+                    downloadLinks.Enqueue(url);
+                    semaphore.Release();
+                    return;
+                }
 
                 if (fileNameConflictPolicy == FileNameConflictPolicy.Rename && File.Exists(fileName))
                 {

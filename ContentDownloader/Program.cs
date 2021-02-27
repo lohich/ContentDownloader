@@ -12,7 +12,7 @@ namespace ContentDownloader
         static ImageDownloader downloader;
         static LinksFinder linksFinder;
         static DriverPool driverPool;
-        static bool IsExecuting => !linksFinder.IsFinished || downloader.Downloaded != linksFinder.TotalLinks;
+        static bool IsExecuting => !linksFinder.IsFinished || downloader.Downloaded + downloader.Skipped != linksFinder.TotalLinks;
 
         static async Task Main(string[] args)
         {
