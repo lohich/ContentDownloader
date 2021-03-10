@@ -10,16 +10,16 @@ namespace ContentDownloader
 {
     internal class LinksFinder
     {
-        private readonly DriverPool driverPool;
+        private readonly DriverFactory driverFactory;
         private readonly ImageDownloader downloader;
 
         private readonly ConcurrentQueue<Uri> containerLinks = new ConcurrentQueue<Uri>();
         private int totalLinks;
 
-        public LinksFinder(ImageDownloader downloader, DriverPool driverPool)
+        public LinksFinder(ImageDownloader downloader, DriverFactory driverFactory)
         {
             this.downloader = downloader;
-            this.driverPool = driverPool;
+            this.driverFactory = driverFactory;
         }
 
         public int TotalLinks => totalLinks;
@@ -40,7 +40,7 @@ namespace ContentDownloader
             {
                 try
                 {
-                    result.AddRange(element.FindElements(By.XPath(xpath)).Select(x => x.GetAttribute(a)));
+                    result.AddRange(element.FindElements(By.XPath(xpath)).Select(x => x.GetAttribute(a)).ToArray());
                 }
                 catch (NoSuchElementException) { }
             }
@@ -48,12 +48,9 @@ namespace ContentDownloader
             return result.Distinct();
         }
 
-        private IWebDriver GetPage(string url)
+        private void GetPage(IWebDriver driver, Uri url)
         {
-            var driver = driverPool.GetDriver();
             driver.Navigate().GoToUrl(url);
-
-            return driver;
         }
 
         private IWebDriver GetNextPage(IWebDriver driver, string xpath)
@@ -61,12 +58,11 @@ namespace ContentDownloader
             try
             {
                 var nextPageLink = driver.FindElement(By.XPath(xpath)).GetAttribute("href");
-                driverPool.Release(driver);
-                return GetPage(nextPageLink);
+                driver.Navigate().GoToUrl(nextPageLink);
+                return driver;
             }
             catch (Exception e) when (e is ArgumentNullException || e is NoSuchElementException)
             {
-                driverPool.Release(driver);
                 return null;
             }
         }
@@ -93,10 +89,18 @@ namespace ContentDownloader
             });
         }
 
-        private void ListPages(string firstPageUrl, string nextPageSelector, string linksSelector, Action<ISearchContext> actionOnPage = null)
+        private void ListPages(Uri firstPageUrl, string nextPageSelector, string linksSelector, Action<ISearchContext> actionOnPage = null)
         {
-            var currentPage = GetPage(firstPageUrl);
+            var driver = driverFactory.GetDriver();
+            GetPage(driver, firstPageUrl);
 
+            ListPages(driver, nextPageSelector, linksSelector, actionOnPage);
+
+            driverFactory.Destroy(driver);
+        }
+
+        private void ListPages(IWebDriver currentPage, string nextPageSelector, string linksSelector, Action<ISearchContext> actionOnPage = null)
+        {
             while (currentPage != null)
             {
                 actionOnPage?.Invoke(currentPage);
@@ -108,30 +112,31 @@ namespace ContentDownloader
 
         private void ListPagesInContainer(string nextPageSelector, string pathSelector, string linksSelector)
         {
+            var driver = driverFactory.GetDriver();
+
             while (!IsContainersFindingFinished || !containerLinks.IsEmpty)
             {
                 if (containerLinks.TryDequeue(out var firstPageUrl))
                 {
+                    GetPage(driver, firstPageUrl);
+
                     if (pathSelector != null)
                     {
                         var path = pathSelector.Split(";");
-                        var page = GetPage(firstPageUrl.ToString());
-                        string nextPageLink = null;
                         foreach (var item in path)
                         {
-                            nextPageLink = page.FindElement(By.XPath(item)).GetAttribute("href");
-                            page.Navigate().GoToUrl(nextPageLink);
-                        }                        
-                        firstPageUrl = new Uri(nextPageLink);
-                        driverPool.Release(page);
+                            driver = GetNextPage(driver, item);
+                        }
                     }
-                    ListPages(firstPageUrl.ToString(), nextPageSelector, linksSelector);
+                    ListPages(driver, nextPageSelector, linksSelector);
                 }
                 else
                 {
                     Thread.Sleep(1000);
                 }
             }
+
+            driverFactory.Destroy(driver);
         }
 
         public async Task FindLinks(CommandLineParams args)
@@ -143,7 +148,7 @@ namespace ContentDownloader
                 threads.Add(Task.Run(() => ListPagesInContainer(args.NextPageInContainerSeclector, args.PathInContainer, args.LinkSelector)));
             }
 
-            ListPages(args.URI.ToString(), args.NextPageContainerSelector, args.LinkSelector,
+            ListPages(args.URI, args.NextPageContainerSelector, args.LinkSelector,
                 page => DoWithLinks(args.ContainerSelector, page, "href",
                 containerLink => containerLinks.Enqueue(new Uri(containerLink))));
 
@@ -152,7 +157,6 @@ namespace ContentDownloader
             await Task.WhenAll(threads);
 
             IsFinished = true;
-            driverPool.Dispose();
         }
     }
 }

@@ -11,7 +11,7 @@ namespace ContentDownloader
     {
         static ImageDownloader downloader;
         static LinksFinder linksFinder;
-        static DriverPool driverPool;
+        static DriverFactory driverFactory;
         static bool IsExecuting => !linksFinder.IsFinished || downloader.Downloaded + downloader.Skipped != linksFinder.TotalLinks;
 
         static async Task Main(string[] args)
@@ -34,19 +34,16 @@ namespace ContentDownloader
                 auth = new AuthParams { AuthUrl = args.AuthUrl, SubmitSelector = args.SubmitSelector, LoginSelector = args.LoginSelector, PasswordSelector = args.PasswordSelector };
             }
 
-            using (var usingPool = new DriverPool(args.DownloadThreadsCount, auth))
-            {
-                driverPool = usingPool;
-                downloader = new ImageDownloader(args.FileNameSegments, args.Output, args.DownloadThreadsCount, args.FileNameConflictPolicy);
-                linksFinder = new LinksFinder(downloader, driverPool);
+            driverFactory = new DriverFactory(auth);
+            downloader = new ImageDownloader(args.FileNameSegments, args.Output, args.DownloadThreadsCount, args.FileNameConflictPolicy);
+            linksFinder = new LinksFinder(downloader, driverFactory);
 
-                var threads = new List<Task>();
+            var threads = new List<Task>();
 
-                threads.Add(Task.Run(() => Stats(startTime)));
-                threads.Add(Task.Run(async () => await linksFinder.FindLinks(args)));
+            threads.Add(Task.Run(() => Stats(startTime)));
+            threads.Add(Task.Run(async () => await linksFinder.FindLinks(args)));
 
-                await Task.WhenAll(threads);
-            }
+            await Task.WhenAll(threads);
 
             Stats(startTime);
             Console.WriteLine("Finished!");
@@ -59,7 +56,6 @@ namespace ContentDownloader
                 Console.Clear();
                 Console.WriteLine($"Started {startTime}");
                 Console.WriteLine($"Downloaded {downloader.Downloaded}/{linksFinder.TotalLinks} (Skipped {downloader.Skipped})");
-                Console.WriteLine($"Drivers in use: {driverPool.InUse}");
                 Console.WriteLine($"Time passed: {DateTime.Now - startTime}");
                 if (linksFinder.IsContainersFindingFinished)
                 {
