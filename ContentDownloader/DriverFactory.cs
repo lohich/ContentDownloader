@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Threading;
+﻿using System.Threading;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 
