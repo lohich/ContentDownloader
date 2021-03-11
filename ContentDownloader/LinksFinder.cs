@@ -143,9 +143,12 @@ namespace ContentDownloader
         {
             var threads = new List<Task>();
 
-            for (int i = 0; i < args.DownloadThreadsCount; i++)
+            if (args.ContainerSelector != null)
             {
-                threads.Add(Task.Run(() => ListPagesInContainer(args.NextPageInContainerSeclector, args.PathInContainer, args.LinkSelector)));
+                for (int i = 0; i < args.DownloadThreadsCount; i++)
+                {
+                    threads.Add(Task.Run(() => ListPagesInContainer(args.NextPageInContainerSeclector, args.PathInContainer, args.LinkSelector)));
+                }
             }
 
             ListPages(args.URI, args.NextPageContainerSelector, args.LinkSelector,
