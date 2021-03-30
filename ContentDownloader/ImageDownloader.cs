@@ -15,6 +15,7 @@ namespace ContentDownloader
         static readonly string invalidRegStr;
         private int downloaded;
         private int skipped;
+        private int totalLinks;
         private readonly int fileNameSegments;
         private readonly string outputPath;
         private readonly ObservableConcurrentQueue<Uri> downloadLinks = new ObservableConcurrentQueue<Uri>();
@@ -36,6 +37,8 @@ namespace ContentDownloader
             invalidRegStr = string.Format(@"([{0}]*\.+$)|([{0}]+)", invalidChars);
         }
 
+        public int TotalLinks => totalLinks;
+
         public int Downloaded => downloaded;
 
         public int Skipped => skipped;
@@ -52,6 +55,7 @@ namespace ContentDownloader
 
         private async Task DownloadNext()
         {
+            Interlocked.Increment(ref totalLinks);
             semaphore.Wait();
 
             if (downloadLinks.TryDequeue(out var url))

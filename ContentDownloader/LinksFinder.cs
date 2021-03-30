@@ -4,29 +4,31 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenQA.Selenium;
+using AngleSharp;
+using AngleSharp.Dom;
 
 namespace ContentDownloader
 {
     internal class LinksFinder
     {
-        private readonly DriverFactory driverFactory;
+        private readonly IBrowsingContext context;
         private readonly ImageDownloader downloader;
 
-        private readonly ConcurrentQueue<Uri> containerLinks = new ConcurrentQueue<Uri>();
-        private int totalLinks;
+        private readonly ConcurrentQueue<string> containerLinks = new ConcurrentQueue<string>();
+        private string host;
 
-        public LinksFinder(ImageDownloader downloader, DriverFactory driverFactory)
+        public LinksFinder(ImageDownloader downloader)
         {
             this.downloader = downloader;
-            this.driverFactory = driverFactory;
+
+            var config = Configuration.Default.WithDefaultLoader().WithDefaultCookies().WithXPath();
+            context = BrowsingContext.New(config);
         }
 
-        public int TotalLinks => totalLinks;
         public bool IsFinished { get; private set; }
         public bool IsContainersFindingFinished { get; private set; }
 
-        private IEnumerable<string> GetElementsAttributesByXpath(string xpath, string attribute, ISearchContext element)
+        private IEnumerable<string> GetElementsAttributesByXpath(string xpath, string attribute, IParentNode element)
         {
             if (xpath == null)
             {
@@ -38,36 +40,41 @@ namespace ContentDownloader
             var result = new List<string>();
             foreach (var a in attibutes)
             {
-                try
-                {
-                    result.AddRange(element.FindElements(By.XPath(xpath)).Select(x => x.GetAttribute(a)).ToArray());
-                }
-                catch (NoSuchElementException) { }
+                var values = element.QuerySelectorAll($"*[xpath>'{xpath}']").Select(x => x.GetAttribute(a));
+                result.AddRange(values);
             }
 
             return result.Distinct();
         }
 
-        private void GetPage(IWebDriver driver, Uri url)
+        private Task<IDocument> GetPage(string url)
         {
-            driver.Navigate().GoToUrl(url);
+            return context.OpenAsync(url);
         }
 
-        private IWebDriver GetNextPage(IWebDriver driver, string xpath)
+        private string GetEndLink(string link)
         {
-            try
+            if(!link.Contains("://"))
             {
-                var nextPageLink = driver.FindElement(By.XPath(xpath)).GetAttribute("href");
-                driver.Navigate().GoToUrl(nextPageLink);
-                return driver;
+                return host + link;
             }
-            catch (Exception e) when (e is ArgumentNullException || e is NoSuchElementException)
-            {
-                return null;
-            }
+
+            return link;
         }
 
-        private void DoWithLinks(string selector, ISearchContext element, string attributes, Action<string> whatToDo)
+        private Task<IDocument> GetNextPage(IDocument driver, string xpath)
+        {
+            var nextPageLink = driver.QuerySelector($"*[xpath>'{xpath}']")?.GetAttribute("href");
+
+            if (nextPageLink == null)
+            {
+                return Task.FromResult<IDocument>(null);
+            }
+
+            return GetPage(GetEndLink( nextPageLink));
+        }
+
+        private void DoWithLinks(string selector, IParentNode element, string attributes, Action<string> whatToDo)
         {
             var links = GetElementsAttributesByXpath(selector, attributes, element);
 
@@ -80,63 +87,55 @@ namespace ContentDownloader
             }
         }
 
-        private void EnqueueLinks(string selector, ISearchContext element)
+        private void EnqueueLinks(string selector, IParentNode element)
         {
             DoWithLinks(selector, element, "href;src", link =>
             {
-                downloader.Download(new Uri(link));
-                Interlocked.Increment(ref totalLinks);
+                downloader.Download(new Uri(GetEndLink(link)));
             });
         }
 
-        private void ListPages(Uri firstPageUrl, string nextPageSelector, string linksSelector, Action<ISearchContext> actionOnPage = null)
+        private async Task ListPages(string firstPageUrl, string nextPageSelector, string linksSelector, Action<IDocument> actionOnPage = null)
         {
-            var driver = driverFactory.GetDriver();
-            GetPage(driver, firstPageUrl);
+            var page = await GetPage(firstPageUrl);
 
-            ListPages(driver, nextPageSelector, linksSelector, actionOnPage);
-
-            driverFactory.Destroy(driver);
+            await ListPages(page, nextPageSelector, linksSelector, actionOnPage);
         }
 
-        private void ListPages(IWebDriver currentPage, string nextPageSelector, string linksSelector, Action<ISearchContext> actionOnPage = null)
+        private async Task ListPages(IDocument currentPage, string nextPageSelector, string linksSelector, Action<IDocument> actionOnPage = null)
         {
             while (currentPage != null)
             {
                 actionOnPage?.Invoke(currentPage);
 
                 EnqueueLinks(linksSelector, currentPage);
-                currentPage = GetNextPage(currentPage, nextPageSelector);
+                currentPage = await GetNextPage(currentPage, nextPageSelector);
             }
         }
 
-        private void ListPagesInContainer(string nextPageSelector, string pathSelector, string linksSelector)
+        private async Task ListPagesInContainer(string nextPageSelector, string pathSelector, string linksSelector)
         {
-            var driver = driverFactory.GetDriver();
-
             while (!IsContainersFindingFinished || !containerLinks.IsEmpty)
             {
                 if (containerLinks.TryDequeue(out var firstPageUrl))
                 {
-                    GetPage(driver, firstPageUrl);
+                    var page = await GetPage(firstPageUrl);
 
                     if (pathSelector != null)
                     {
                         var path = pathSelector.Split(";");
                         foreach (var item in path)
                         {
-                            driver = GetNextPage(driver, item);
+                            page = await GetNextPage(page, item);
                         }
                     }
-                    ListPages(driver, nextPageSelector, linksSelector);
+                    await ListPages(page, nextPageSelector, linksSelector);
                 }
                 else
                 {
                     Thread.Sleep(1000);
                 }
             }
-
-            driverFactory.Destroy(driver);
         }
 
         public async Task FindLinks(CommandLineParams args)
@@ -147,13 +146,15 @@ namespace ContentDownloader
             {
                 for (int i = 0; i < args.DownloadThreadsCount; i++)
                 {
-                    threads.Add(Task.Run(() => ListPagesInContainer(args.NextPageInContainerSeclector, args.PathInContainer, args.LinkSelector)));
+                    threads.Add(Task.Run(async () => await ListPagesInContainer(args.NextPageInContainerSeclector, args.PathInContainer, args.LinkSelector)));
                 }
             }
 
-            ListPages(args.URI, args.NextPageContainerSelector, args.LinkSelector,
+            host = $"{args.URI.Scheme}://{args.URI.Host}";
+
+            await ListPages(args.URI.ToString(), args.NextPageContainerSelector, args.LinkSelector,
                 page => DoWithLinks(args.ContainerSelector, page, "href",
-                containerLink => containerLinks.Enqueue(new Uri(containerLink))));
+                containerLink => containerLinks.Enqueue(GetEndLink(containerLink))));
 
             IsContainersFindingFinished = true;
 

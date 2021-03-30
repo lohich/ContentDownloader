@@ -11,8 +11,7 @@ namespace ContentDownloader
     {
         static ImageDownloader downloader;
         static LinksFinder linksFinder;
-        static DriverFactory driverFactory;
-        static bool IsExecuting => !linksFinder.IsFinished || downloader.Downloaded + downloader.Skipped != linksFinder.TotalLinks;
+        static bool IsExecuting => !linksFinder.IsFinished || downloader.Downloaded + downloader.Skipped != downloader.TotalLinks;
 
         static async Task Main(string[] args)
         {
@@ -34,9 +33,8 @@ namespace ContentDownloader
                 auth = new AuthParams { AuthUrl = args.AuthUrl, SubmitSelector = args.SubmitSelector, LoginSelector = args.LoginSelector, PasswordSelector = args.PasswordSelector };
             }
 
-            driverFactory = new DriverFactory(auth);
             downloader = new ImageDownloader(args.FileNameSegments, args.Output, args.DownloadThreadsCount, args.FileNameConflictPolicy);
-            linksFinder = new LinksFinder(downloader, driverFactory);
+            linksFinder = new LinksFinder(downloader);
 
             var threads = new List<Task>();
 
@@ -55,7 +53,7 @@ namespace ContentDownloader
             {
                 Console.Clear();
                 Console.WriteLine($"Started {startTime}");
-                Console.WriteLine($"Downloaded {downloader.Downloaded}/{linksFinder.TotalLinks} (Skipped {downloader.Skipped})");
+                Console.WriteLine($"Downloaded {downloader.Downloaded}/{downloader.TotalLinks} (Skipped {downloader.Skipped})");
                 Console.WriteLine($"Time passed: {DateTime.Now - startTime}");
                 if (linksFinder.IsContainersFindingFinished)
                 {
