@@ -14,7 +14,6 @@ namespace ContentDownloader
         private readonly ImageDownloader downloader;
 
         private readonly ConcurrentQueue<Uri> containerLinks = new ConcurrentQueue<Uri>();
-        private int totalLinks;
 
         public LinksFinder(ImageDownloader downloader, DriverFactory driverFactory)
         {
@@ -22,21 +21,18 @@ namespace ContentDownloader
             this.driverFactory = driverFactory;
         }
 
-        public int TotalLinks => totalLinks;
         public bool IsFinished { get; private set; }
         public bool IsContainersFindingFinished { get; private set; }
 
-        private IEnumerable<string> GetElementsAttributesByXpath(string xpath, string attribute, ISearchContext element)
+        private IEnumerable<string> GetElementsAttributesByXpath(string xpath, ISearchContext element, params string[] attributes)
         {
             if (xpath == null)
             {
                 return null;
             }
 
-            var attibutes = attribute.Split(';');
-
             var result = new List<string>();
-            foreach (var a in attibutes)
+            foreach (var a in attributes)
             {
                 try
                 {
@@ -67,9 +63,9 @@ namespace ContentDownloader
             }
         }
 
-        private void DoWithLinks(string selector, ISearchContext element, string attributes, Action<string> whatToDo)
+        private void DoWithLinks(string selector, ISearchContext element, Action<string> whatToDo, params string[] attributes)
         {
-            var links = GetElementsAttributesByXpath(selector, attributes, element);
+            var links = GetElementsAttributesByXpath(selector, element, attributes);
 
             if (links != null)
             {
@@ -82,11 +78,10 @@ namespace ContentDownloader
 
         private void EnqueueLinks(string selector, ISearchContext element)
         {
-            DoWithLinks(selector, element, "href;src", link =>
+            DoWithLinks(selector, element, link =>
             {
                 downloader.Download(new Uri(link));
-                Interlocked.Increment(ref totalLinks);
-            });
+            }, "href", "src");
         }
 
         private void ListPages(Uri firstPageUrl, string nextPageSelector, string linksSelector, Action<ISearchContext> actionOnPage = null)
@@ -110,7 +105,7 @@ namespace ContentDownloader
             }
         }
 
-        private void ListPagesInContainer(string nextPageSelector, string pathSelector, string linksSelector)
+        private void ListPagesInContainer(string nextPageSelector, string[] path, string linksSelector)
         {
             var driver = driverFactory.GetDriver();
 
@@ -120,14 +115,11 @@ namespace ContentDownloader
                 {
                     GetPage(driver, firstPageUrl);
 
-                    if (pathSelector != null)
+                    foreach (var item in path)
                     {
-                        var path = pathSelector.Split(";");
-                        foreach (var item in path)
-                        {
-                            driver = GetNextPage(driver, item);
-                        }
+                        driver = GetNextPage(driver, item);
                     }
+
                     ListPages(driver, nextPageSelector, linksSelector);
                 }
                 else
@@ -147,13 +139,13 @@ namespace ContentDownloader
             {
                 for (int i = 0; i < args.DownloadThreadsCount; i++)
                 {
-                    threads.Add(Task.Run(() => ListPagesInContainer(args.NextPageInContainerSeclector, args.PathInContainer, args.LinkSelector)));
+                    threads.Add(Task.Run(() => ListPagesInContainer(args.NextPageInContainerSeclector, args.PathInContainer.ToArray(), args.LinkSelector)));
                 }
             }
 
             ListPages(args.URI, args.NextPageContainerSelector, args.LinkSelector,
-                page => DoWithLinks(args.ContainerSelector, page, "href",
-                containerLink => containerLinks.Enqueue(new Uri(containerLink))));
+                page => DoWithLinks(args.ContainerSelector, page,
+                containerLink => containerLinks.Enqueue(new Uri(containerLink)), "href"));
 
             IsContainersFindingFinished = true;
 

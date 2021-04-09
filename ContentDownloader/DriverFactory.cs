@@ -16,7 +16,7 @@ namespace ContentDownloader
         public IWebDriver GetDriver()
         {
             var driverParams = new ChromeOptions();
-            driverParams.AddArgument("headless");
+            //driverParams.AddArgument("headless");
             driverParams.AddUserProfilePreference("profile.default_content_setting_values.images", 2);
             driverParams.PageLoadStrategy = PageLoadStrategy.Normal;
             var service = ChromeDriverService.CreateDefaultService();

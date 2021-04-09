@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using CommandLine;
+using CommandLine.Text;
 
 namespace ContentDownloader
 {
@@ -12,11 +13,16 @@ namespace ContentDownloader
         static ImageDownloader downloader;
         static LinksFinder linksFinder;
         static DriverFactory driverFactory;
-        static bool IsExecuting => !linksFinder.IsFinished || downloader.Downloaded + downloader.Skipped != linksFinder.TotalLinks;
+        static bool IsExecuting => !linksFinder.IsFinished || downloader.Downloaded + downloader.Skipped != downloader.TotalLinks;
 
         static async Task Main(string[] args)
         {
-            await new Parser(x => x.CaseInsensitiveEnumValues = true).ParseArguments<CommandLineParams>(args).WithParsedAsync(DoWork);
+            var result = await new Parser(x => x.CaseInsensitiveEnumValues = true).ParseArguments<CommandLineParams>(args).WithParsedAsync(DoWork);
+            if (result.Tag == ParserResultType.NotParsed)
+            {
+                var help = HelpText.AutoBuild(result);
+                Console.WriteLine(help);
+            }
         }
 
         static async Task DoWork(CommandLineParams args)
@@ -55,7 +61,7 @@ namespace ContentDownloader
             {
                 Console.Clear();
                 Console.WriteLine($"Started {startTime}");
-                Console.WriteLine($"Downloaded {downloader.Downloaded}/{linksFinder.TotalLinks} (Skipped {downloader.Skipped})");
+                Console.WriteLine($"Downloaded {downloader.Downloaded}/{downloader.TotalLinks} (Skipped {downloader.Skipped})");
                 Console.WriteLine($"Time passed: {DateTime.Now - startTime}");
                 if (linksFinder.IsContainersFindingFinished)
                 {

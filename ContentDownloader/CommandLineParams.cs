@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using CommandLine;
 
 namespace ContentDownloader
@@ -23,14 +24,14 @@ namespace ContentDownloader
         [Option("output", HelpText = "Output directory", Required = true)]
         public string Output { get; set; }
 
-        [Option("url", Required = true, HelpText = "Start url")]
+        [Option("url", Required = true, HelpText = "Start url or default container")]
         public Uri URI { get; set; }
 
         [Option("threads", HelpText = "Count of threads for work", Default = 5)]
         public int DownloadThreadsCount { get; set; }
 
         [Option("containerPath", HelpText = "Path in container that shoud be passed before finding links")]
-        public string PathInContainer { get; set; }
+        public IEnumerable<string> PathInContainer { get; set; }
 
         [Option("authUrl", HelpText = "Url for auth page")]
         public string AuthUrl { get; set; }

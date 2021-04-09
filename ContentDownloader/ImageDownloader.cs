@@ -15,6 +15,7 @@ namespace ContentDownloader
         static readonly string invalidRegStr;
         private int downloaded;
         private int skipped;
+        private int totalLinks;
         private readonly int fileNameSegments;
         private readonly string outputPath;
         private readonly ObservableConcurrentQueue<Uri> downloadLinks = new ObservableConcurrentQueue<Uri>();
@@ -36,12 +37,15 @@ namespace ContentDownloader
             invalidRegStr = string.Format(@"([{0}]*\.+$)|([{0}]+)", invalidChars);
         }
 
+        public int TotalLinks => totalLinks;
+
         public int Downloaded => downloaded;
 
         public int Skipped => skipped;
 
         public void Download(Uri url)
         {
+            Interlocked.Increment(ref totalLinks);
             downloadLinks.Enqueue(url);
         }
 
