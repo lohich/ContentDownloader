@@ -1,10 +1,7 @@
---url "http://se-fan.ru/pictures/ru/2/128x128/erogirls/all.xhtml" --link "//a[text()='Оригинал']" --output "C:\proj\download" --container "//a[contains(@title,'Смотреть')]" --nextLinks "//a[@title='Далее']" --names 2 --nextContainer "//a[@title='Далее']"
+# Content downloader
 
---url "http://joyreactor.cc/user/lohich/favorite" --link "//div[contains(@class,'post_content')]//div[@class='image']//a | //div[contains(@class,'post_content')]//div[@class='image']/img" --output "C:\proj\download" --nextContainer "//a[@class='next']" --authUrl http://joyreactor.cc/login --authLogin "//div[@id='content']//input[@name='signin[username]'];lohich2" --authPassword "//div[@id='content']//input[@name='signin[password]'];478033WoW" --authSubmit "//div[@id='content']//input[@type='submit']"
+A small cli tool for getting some content form different sites
 
---url "http://joyreactor.cc/user/lohich" --link "//div[contains(@class,'post_content')]//div[@class='image']//a | //div[contains(@class,'post_content')]//div[@class='image']/img" --output "C:\proj\download" --nextContainer "//a[@class='next']" --nextLinks "//a[@class='next']" --container "//div[preceding-sibling::h2/text()='Читает']/a" --authUrl http://joyreactor.cc/login --authLogin "//div[@id='content']//input[@name='signin[username]'];lohich2" --authPassword "//div[@id='content']//input[@name='signin[password]'];478033WoW" --authSubmit "//div[@id='content']//input[@type='submit']" --containerPath "//a[text()='Бездна']"
+Google chrome required!
 
---url "http://joyreactor.cc/tag/artist/rating" --link "//div[contains(@class,'post_content')]//div[@class='image']//a | //div[contains(@class,'post_content')]//div[@class='image']/img" --output "C:\proj\download" --nextContainer "//a[@class='next']" --nextLinks "//a[@class='next']" --container "//div[@class='blog_list_item']//strong/a[not(@title='furry artist')]" --authUrl http://joyreactor.cc/login --authLogin "//div[@id='content']//input[@name='signin[username]'];lohich2" --authPassword "//div[@id='content']//input[@name='signin[password]'];478033WoW" --authSubmit "//div[@id='content']//input[@type='submit']" --containerPath "//a[text()='Бездна']"
-
-http://joyreactor.cc/tag/furry+artist/rating
-http://joyreactor.cc/tag/artist/rating
+use --help for usage information
