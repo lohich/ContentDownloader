@@ -337,3 +337,6 @@ ASALocalRun/
 # Vs Code
 .vscode/
 
+# launch settings
+Properties/
+
