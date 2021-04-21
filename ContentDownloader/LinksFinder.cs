@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenQA.Selenium;
@@ -36,7 +37,7 @@ namespace ContentDownloader
             {
                 try
                 {
-                    result.AddRange(element.FindElements(By.XPath(xpath)).Select(x => x.GetAttribute(a)).ToArray());
+                    result.AddRange(element.FindElements(By.XPath(xpath)).ToArray().Select(x => x.GetAttribute(a)));
                 }
                 catch (NoSuchElementException) { }
             }
