@@ -47,5 +47,8 @@ namespace ContentDownloader
 
         [Option("fileNameConflict", HelpText = "What to do when file exists(ignore, replace, rename)", Default = FileNameConflictPolicy.Ignore)]
         public FileNameConflictPolicy FileNameConflictPolicy { get; set; }
+
+        [Option("verbose", HelpText = "Show or not Google Chrome windows")]
+        public bool IsChromeWindowsRequired { get; set; }
     }
 }

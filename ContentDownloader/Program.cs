@@ -33,11 +33,11 @@ namespace ContentDownloader
                 Directory.CreateDirectory(args.Output);
             }
 
-            AuthParams auth = null;
+            ChromeDriverFactoryParams auth = null;
 
             if (args.AuthUrl != null)
             {
-                auth = new AuthParams { AuthUrl = args.AuthUrl, SubmitSelector = args.SubmitSelector, LoginSelector = args.LoginSelector, PasswordSelector = args.PasswordSelector };
+                auth = new ChromeDriverFactoryParams { AuthUrl = args.AuthUrl, SubmitSelector = args.SubmitSelector, LoginSelector = args.LoginSelector, PasswordSelector = args.PasswordSelector, IsChromeWindowsRequired = args.IsChromeWindowsRequired };
             }
 
             driverFactory = new DriverFactory(auth);

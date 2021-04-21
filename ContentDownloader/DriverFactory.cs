@@ -6,34 +6,40 @@ namespace ContentDownloader
 {
     internal class DriverFactory
     {
-        private readonly AuthParams authParams;
+        private readonly ChromeDriverFactoryParams _params;
 
-        public DriverFactory(AuthParams authParams)
+        public DriverFactory(ChromeDriverFactoryParams opt)
         {
-            this.authParams = authParams;
+            _params = opt;
         }
 
         public IWebDriver GetDriver()
         {
             var driverParams = new ChromeOptions();
-            driverParams.AddArgument("headless");
             driverParams.AddUserProfilePreference("profile.default_content_setting_values.images", 2);
             driverParams.PageLoadStrategy = PageLoadStrategy.Normal;
+
+            if (!_params.IsChromeWindowsRequired)
+            {
+                driverParams.AddArgument("headless");
+            }
+
             var service = ChromeDriverService.CreateDefaultService();
             service.HideCommandPromptWindow = true;
+
             var result = new ChromeDriver(service, driverParams);
 
-            if (authParams != null)
+            if (_params != null)
             {
-                result.Navigate().GoToUrl(authParams.AuthUrl);
+                result.Navigate().GoToUrl(_params.AuthUrl);
 
-                var tmp = authParams.LoginSelector.Split(';');
+                var tmp = _params.LoginSelector.Split(';');
                 result.FindElement(By.XPath(tmp[0])).SendKeys(tmp[1]);
 
-                tmp = authParams.PasswordSelector.Split(';');
+                tmp = _params.PasswordSelector.Split(';');
                 result.FindElement(By.XPath(tmp[0])).SendKeys(tmp[1]);
 
-                result.FindElement(By.XPath(authParams.SubmitSelector)).Click();
+                result.FindElement(By.XPath(_params.SubmitSelector)).Click();
 
                 Thread.Sleep(1000);
             }
